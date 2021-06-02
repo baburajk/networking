@@ -1,0 +1,228 @@
+
+
+
+[root@panchajanya ~]# tcpdump -nni virbr0 host 172.16.10.130
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on virbr0, link-type EN10MB (Ethernet), capture size 262144 bytes
+22:13:02.545637 IP 192.168.122.45.59136 > 172.16.10.130.44444: UDP, length 1472
+22:13:02.550199 IP 192.168.122.45.59136 > 172.16.10.130.44445: UDP, length 1472
+22:13:02.553284 IP 192.168.122.45.59136 > 172.16.10.130.44446: UDP, length 1472
+22:13:02.553328 IP 192.168.122.1.59136 > 172.16.10.130.44446: UDP, length 1472
+22:13:02.553591 IP 172.16.10.130 > 192.168.122.1: ICMP host 172.16.10.130 unreachable - admin prohibited filter, length 556
+22:13:02.553613 IP 172.16.10.130 > 192.168.122.45: ICMP host 172.16.10.130 unreachable - admin prohibited filter, length 556
+22:13:07.859260 ARP, Request who-has 172.16.10.130 tell 192.168.122.1, length 28
+
+
+[root@netlab2 ~]# ip route show
+default via 192.168.122.1 dev enp1s0 proto dhcp metric 100
+172.16.10.0/26 dev enp1s0 scope link
+172.16.10.128/26 dev dummy0 proto kernel scope link src 172.16.10.130
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown
+192.168.122.0/24 dev enp1s0 proto kernel scope link src 192.168.122.35 metric 100
+
+[root@netlab2 ~]# ip route add 172.16.10.0/26 dev enp1s0
+
+[root@netlab2 ~]# ip route del 172.16.10.128/26 dev dummy0
+
+[root@netlab2 ~]# ip route show
+default via 192.168.122.1 dev enp1s0 proto dhcp metric 100
+172.16.10.0/26 dev enp1s0 scope link
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown
+192.168.122.0/24 dev enp1s0 proto kernel scope link src 192.168.122.35 metric 100
+
+[root@netlab2 ~]# ip route get 172.16.10.129
+172.16.10.129 via 192.168.122.1 dev enp1s0 src 192.168.122.35 uid 0
+    cache
+
+
+
+[root@netlab3 ~]# tracepath 172.16.10.130
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  _gateway                                              0.221ms
+ 1:  _gateway                                              0.164ms
+ 2:  172.16.10.130                                         0.574ms !H
+     Resume: pmtu 1500
+
+
+[root@netlab2 ~]#  tracepath -n 172.16.10.129
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  192.168.122.1                                         0.346ms
+ 1:  192.168.122.1                                         0.248ms
+ 2:  172.16.10.129                                         0.467ms !H
+     Resume: pmtu 1500
+
+
+[root@panchajanya networking]# tcpdump -nni virbr0 host 172.16.10.129
+tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+listening on virbr0, link-type EN10MB (Ethernet), capture size 262144 bytes
+22:16:39.764337 IP 192.168.122.35.55033 > 172.16.10.129.44444: UDP, length 1472
+22:16:39.764561 IP 192.168.122.35.55033 > 172.16.10.129.44445: UDP, length 1472
+22:16:39.764766 IP 192.168.122.35.55033 > 172.16.10.129.44446: UDP, length 1472
+22:16:39.764797 IP 192.168.122.1.55033 > 172.16.10.129.44446: UDP, length 1472
+22:16:39.765110 IP 172.16.10.129 > 192.168.122.1: ICMP host 172.16.10.129 unreachable - admin prohibited filter, length 556
+22:16:39.765132 IP 172.16.10.129 > 192.168.122.35: ICMP host 172.16.10.129 unreachable - admin prohibited filter, length 556
+22:16:44.947262 ARP, Request who-has 172.16.10.129 tell 192.168.122.1, length 28
+22:16:44.947469 ARP, Reply 172.16.10.129 is-at 52:54:00:56:0b:cc, length 28
+
+
+[root@panchajanya networking]# ip route del 172.16.10.0/24 via 192.168.122.1
+
+[root@netlab2 ~]#  tracepath -n 172.16.10.129
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  192.168.122.1                                         0.368ms
+ 1:  192.168.122.1                                         0.246ms
+ 2:  10.0.1.1                                              0.924ms
+ 3:  10.0.0.1                                              1.401ms
+^C
+
+
+
+BRIDGE/VETH/ROUTING Experiments.
+
+
+[root@panchajanya networking]# ip link add br_fe type bridge
+[root@panchajanya networking]# ip link show br_fe
+33: br_fe: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 9a:74:a6:10:a6:1f brd ff:ff:ff:ff:ff:ff
+
+
+[root@panchajanya networking]# ip link show br_fe
+33: br_fe: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 9a:74:a6:10:a6:1f brd ff:ff:ff:ff:ff:ff
+
+[root@panchajanya networking]# ip addr add 172.16.10.1/26 dev br_fe
+
+
+[root@panchajanya networking]# ip addr show br_fe
+33: br_fe: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+    link/ether 9a:74:a6:10:a6:1f brd ff:ff:ff:ff:ff:ff
+    inet 172.16.10.1/26 scope global br_fe
+       valid_lft forever preferred_lft forever
+
+
+[root@panchajanya networking]# ip link set br_fe up
+
+[root@panchajanya networking]# ip link show br_fe
+33: br_fe: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 9a:74:a6:10:a6:1f brd ff:ff:ff:ff:ff:ff
+[root@panchajanya networking]#
+
+
+
+[root@netlab2 ~]# ip link add dummy0 type dummy
+[root@netlab2 ~]# ip addr add 172.16.10.129/26 dev dummy0
+[root@netlab2 ~]# ip link set dummy0 up
+
+[root@netlab2 ~]# ip link show dummy0
+6: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 0a:e8:e4:a6:dc:df brd ff:ff:ff:ff:ff:ff
+
+[root@netlab2 ~]# ip addr show dummy0
+6: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/ether 0a:e8:e4:a6:dc:df brd ff:ff:ff:ff:ff:ff
+    inet 172.16.10.129/26 scope global dummy0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::8e8:e4ff:fea6:dcdf/64 scope link
+       valid_lft forever preferred_lft forever
+
+
+[root@netlab2 ~]# ip route show
+default via 192.168.122.1 dev enp1s0 proto dhcp metric 100
+172.16.10.128/26 dev dummy0 proto kernel scope link src 172.16.10.129
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown
+192.168.122.0/24 dev enp1s0 proto kernel scope link src 192.168.122.35 metric 100
+
+
+[root@netlab2 ~]# ip route del 172.16.10.128/26 dev dummy0
+[root@netlab2 ~]# ip route add 172.16.10.0/26 dev enp1s0
+[root@netlab2 ~]# ip route show
+default via 192.168.122.1 dev enp1s0 proto dhcp metric 100
+172.16.10.0/26 dev enp1s0 scope link
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown
+192.168.122.0/24 dev enp1s0 proto kernel scope link src 192.168.122.35 metric 100
+
+
+[root@panchajanya networking]# ip route add 172.16.10.0/24 via 192.168.122.1
+
+[root@netlab3 ~]# tracepath -n 172.16.10.129
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  192.168.122.1                                         0.290ms
+ 1:  192.168.122.1                                         0.144ms
+ 2:  172.16.10.129                                         0.472ms !H
+     Resume: pmtu 1500
+
+
+[root@netlab2 ~]#  tracepath -n 172.16.10.130
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  192.168.122.1                                         0.176ms
+ 1:  192.168.122.1                                         0.116ms
+ 2:  no reply
+ 3:  no reply
+ 4:  no reply
+ 5:  172.16.10.130                                         0.717ms !H
+     Resume: pmtu 1500
+
+
+[root@netlab2 ~]# arp -a
+netlab1 (192.168.122.25) at 52:54:00:56:0b:aa [ether] on enp1s0
+_gateway (192.168.122.1) at 52:54:00:5c:61:e1 [ether] on enp1s0
+netlab3 (192.168.122.45) at 52:54:00:56:0b:cc [ether] on enp1s0
+
+
+[root@netlab2 ~]# ip link add edge_bridge type bridge
+[root@netlab2 ~]# ip link add host_bridge type bridge
+
+
+[root@netlab2 ~]# ip link add host_veth1 type veth peer name edge_veth1
+
+[root@netlab2 ~]# ip link set host_veth1 master host_bridge
+[root@netlab2 ~]# ip link set edge_veth1 master edge_bridge
+
+[root@netlab2 ~]# ethtool -S host_veth1 | grep peer
+     peer_ifindex: 9
+[root@netlab2 ~]# ip link show | egrep '^9:|^10:'
+9: edge_veth1@host_veth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master edge_bridge state UP mode DEFAULT group default qlen 1000
+10: host_veth1@edge_veth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master host_bridge state UP mode DEFAULT group default qlen 1000
+[root@netlab2 ~]# ethtool -S edge_veth1 | grep peer
+     peer_ifindex: 10
+
+
+[root@netlab3 ~]# tracepath -n 172.16.10.132
+ 1?: [LOCALHOST]                      pmtu 1500
+ 1:  192.168.122.1                                         0.320ms
+ 1:  192.168.122.1                                         0.102ms
+ 2:  172.16.10.132                                         0.917ms !H
+     Resume: pmtu 1500
+
+
+[root@netlab2 ~]# ip netns add ns1
+[root@netlab2 ~]# ip netns list
+ns1
+[root@netlab2 ~]# ip link set dev edge_veth1 netns ns1
+[root@netlab2 ~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:56:0b:bb brd ff:ff:ff:ff:ff:ff
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default
+    link/ether 02:42:9a:23:1d:36 brd ff:ff:ff:ff:ff:ff
+6: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 0a:e8:e4:a6:dc:df brd ff:ff:ff:ff:ff:ff
+7: edge_bridge: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+8: host_bridge: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default qlen 1000
+    link/ether 72:0a:ff:56:a9:0b brd ff:ff:ff:ff:ff:ff
+10: host_veth1@if9: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue master host_bridge state LOWERLAYERDOWN mode DEFAULT group default qlen 1000
+    link/ether 72:0a:ff:56:a9:0b brd ff:ff:ff:ff:ff:ff link-netns ns1
+
+
+[root@netlab2 ~]# ip netns exec ns1 ip link show
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+9: edge_veth1@if10: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 4a:61:68:01:39:f4 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+[root@netlab2 ~]# ip netns list
+ns1 (id: 0)
+
+
+

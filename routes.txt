@@ -1,0 +1,182 @@
+Static Routes 
+
+Add an additonal interface IP address and get the host machine route the packets to this VM/interface.
+
+
+[root@netlab3 ~]# ip link add dummy0 type dummy
+[root@netlab3 ~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:56:0b:cc brd ff:ff:ff:ff:ff:ff
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default
+    link/ether 02:42:7a:6f:2b:84 brd ff:ff:ff:ff:ff:ff
+4: dummy0: <BROADCAST,NOARP> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+
+
+[root@netlab3 ~]# ip address add 172.16.10.129/26 dev dummy0
+[root@netlab3 ~]# ip link dummy0 up
+
+[root@netlab3 ~]# ip addr show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 52:54:00:56:0b:cc brd ff:ff:ff:ff:ff:ff
+    inet 192.168.122.45/24 brd 192.168.122.255 scope global dynamic noprefixroute enp1s0
+       valid_lft 3010sec preferred_lft 3010sec
+    inet6 2001:db8:ca2:2:1::12/128 scope global dynamic noprefixroute
+       valid_lft 2863sec preferred_lft 2863sec
+    inet6 fe80::1eb1:c7ab:8c03:f790/64 scope link noprefixroute
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default
+    link/ether 02:42:7a:6f:2b:84 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+4: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+    inet 172.16.10.129/26 scope global dummy0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::7cea:c0ff:feeb:95ff/64 scope link
+       valid_lft forever preferred_lft forever
+
+
+b) Ping/reachability to this machine is zero since there's no default route that can reach this network.
+
+[root@panchajanya ~]# ip route show
+default via 10.0.1.1 dev enp7s0 proto static metric 100
+default via 192.168.2.1 dev enp8s0 proto static metric 101
+10.0.1.0/24 dev enp7s0 proto kernel scope link src 10.0.1.11 metric 100
+192.168.2.0/24 dev enp8s0 proto kernel scope link src 192.168.2.11 metric 101
+192.168.3.0/24 via 192.168.2.1 dev enp8s0 proto static metric 101
+192.168.122.0/24 dev virbr0 proto kernel scope link src 192.168.122.1
+
+
+[root@panchajanya ~]# ping 172.16.10.129
+PING 172.16.10.129 (172.16.10.129) 56(84) bytes of data.
+64 bytes from 172.16.10.129: icmp_seq=1 ttl=64 time=0.382 ms
+64 bytes from 172.16.10.129: icmp_seq=2 ttl=64 time=0.418 ms
+
+
+c) Add static route to the host machine, since the IP lives on the virbr0 bridge created for Virtual Machines, the route was added via that device 
+
+[root@panchajanya ~]# ip route add 172.16.10.0/24 via 192.168.122.1
+[root@panchajanya ~]# ip route show
+default via 10.0.1.1 dev enp7s0 proto static metric 100
+default via 192.168.2.1 dev enp8s0 proto static metric 101
+10.0.1.0/24 dev enp7s0 proto kernel scope link src 10.0.1.11 metric 100
+172.16.10.0/24 via 192.168.122.1 dev virbr0
+192.168.2.0/24 dev enp8s0 proto kernel scope link src 192.168.2.11 metric 101
+192.168.3.0/24 via 192.168.2.1 dev enp8s0 proto static metric 101
+192.168.122.0/24 dev virbr0 proto kernel scope link src 192.168.122.1
+[root@panchajanya ~]# traceroute 172.16.10.129
+traceroute to 172.16.10.129 (172.16.10.129), 30 hops max, 60 byte packets
+ 1  172.16.10.129 (172.16.10.129)  0.270 ms !X  0.246 ms !X  0.248 ms !X
+
+
+
+[root@netlab3 ~]# ping netlab2
+PING netlab2 (192.168.122.35) 56(84) bytes of data.
+64 bytes from netlab2 (192.168.122.35): icmp_seq=1 ttl=64 time=0.771 ms
+^C
+--- netlab2 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.771/0.771/0.771/0.000 ms
+[root@netlab3 ~]# arp -a
+_gateway (192.168.122.1) at 52:54:00:5c:61:e1 [ether] on enp1s0
+netlab1 (192.168.122.25) at 52:54:00:56:0b:aa [ether] on enp1s0
+netlab2 (192.168.122.35) at 52:54:00:56:0b:bb [ether] on enp1s0
+
+
+d) Review the ARP entries and the MAC learned by the bridge & tear it down
+
+
+[root@netlab3 ~]# arp -a
+_gateway (192.168.122.1) at 52:54:00:5c:61:e1 [ether] on enp1s0
+netlab1 (192.168.122.25) at 52:54:00:56:0b:aa [ether] on enp1s0
+netlab2 (192.168.122.35) at 52:54:00:56:0b:bb [ether] on enp1s0
+[root@netlab3 ~]# bridge fdb show
+01:00:5e:00:00:01 dev enp1s0 self permanent
+33:33:00:00:00:01 dev enp1s0 self permanent
+33:33:ff:03:f7:90 dev enp1s0 self permanent
+01:00:5e:00:00:fb dev enp1s0 self permanent
+33:33:ff:00:00:12 dev enp1s0 self permanent
+33:33:00:00:00:fb dev enp1s0 self permanent
+33:33:00:00:00:01 dev docker0 self permanent
+01:00:5e:00:00:01 dev docker0 self permanent
+01:00:5e:00:00:fb dev docker0 self permanent
+02:42:7a:6f:2b:84 dev docker0 vlan 1 master docker0 permanent
+02:42:7a:6f:2b:84 dev docker0 master docker0 permanent
+7e:ea:c0:eb:95:ff dev dummy0 vlan 1 master br_fe permanent
+7e:ea:c0:eb:95:ff dev dummy0 master br_fe permanent
+33:33:00:00:00:01 dev dummy0 self permanent
+01:00:5e:00:00:01 dev dummy0 self permanent
+33:33:00:00:00:01 dev br_fe self permanent
+01:00:5e:00:00:01 dev br_fe self permanent
+33:33:ff:eb:95:ff dev br_fe self permanent
+01:00:5e:00:00:fb dev br_fe self permanent
+33:33:00:00:00:fb dev br_fe self permanent
+[root@netlab3 ~]# bridge fdb show dummy0
+01:00:5e:00:00:01 dev enp1s0 self permanent
+33:33:00:00:00:01 dev enp1s0 self permanent
+33:33:ff:03:f7:90 dev enp1s0 self permanent
+01:00:5e:00:00:fb dev enp1s0 self permanent
+33:33:ff:00:00:12 dev enp1s0 self permanent
+33:33:00:00:00:fb dev enp1s0 self permanent
+33:33:00:00:00:01 dev docker0 self permanent
+01:00:5e:00:00:01 dev docker0 self permanent
+01:00:5e:00:00:fb dev docker0 self permanent
+02:42:7a:6f:2b:84 dev docker0 vlan 1 master docker0 permanent
+02:42:7a:6f:2b:84 dev docker0 master docker0 permanent
+7e:ea:c0:eb:95:ff dev dummy0 vlan 1 master br_fe permanent
+7e:ea:c0:eb:95:ff dev dummy0 master br_fe permanent
+33:33:00:00:00:01 dev dummy0 self permanent
+01:00:5e:00:00:01 dev dummy0 self permanent
+33:33:00:00:00:01 dev br_fe self permanent
+01:00:5e:00:00:01 dev br_fe self permanent
+33:33:ff:eb:95:ff dev br_fe self permanent
+01:00:5e:00:00:fb dev br_fe self permanent
+33:33:00:00:00:fb dev br_fe self permanent
+[root@netlab3 ~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:56:0b:cc brd ff:ff:ff:ff:ff:ff
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default
+    link/ether 02:42:7a:6f:2b:84 brd ff:ff:ff:ff:ff:ff
+4: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue master br_fe state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+5: br_fe: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+[root@netlab3 ~]# ip link set dev dummy0 nomaster
+[root@netlab3 ~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:56:0b:cc brd ff:ff:ff:ff:ff:ff
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default
+    link/ether 02:42:7a:6f:2b:84 brd ff:ff:ff:ff:ff:ff
+4: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+5: br_fe: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+[root@netlab3 ~]# ip link delete dev br_fe
+[root@netlab3 ~]#
+[root@netlab3 ~]#
+[root@netlab3 ~]# ip link show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP mode DEFAULT group default qlen 1000
+    link/ether 52:54:00:56:0b:cc brd ff:ff:ff:ff:ff:ff
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default
+    link/ether 02:42:7a:6f:2b:84 brd ff:ff:ff:ff:ff:ff
+4: dummy0: <BROADCAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000
+    link/ether 7e:ea:c0:eb:95:ff brd ff:ff:ff:ff:ff:ff
+[root@netlab3 ~]# ip route show
+default via 192.168.122.1 dev enp1s0 proto dhcp metric 100
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown
+192.168.122.0/24 dev enp1s0 proto kernel scope link src 192.168.122.45 metric 100
